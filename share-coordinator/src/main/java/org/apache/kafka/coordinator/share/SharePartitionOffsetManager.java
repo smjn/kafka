@@ -23,6 +23,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Util class to track the offsets written into the internal topic
@@ -40,6 +41,7 @@ public class SharePartitionOffsetManager {
     // minimum offset representing the smallest necessary offset (non-redundant)
     // across the internal partition
     private long minOffset = Long.MAX_VALUE;
+    private AtomicLong lastRedundant = new AtomicLong(0);
 
     public SharePartitionOffsetManager(SnapshotRegistry snapshotRegistry) {
         Objects.requireNonNull(snapshotRegistry);
@@ -64,7 +66,10 @@ public class SharePartitionOffsetManager {
         offsets.put(key, offset);
 
         Optional<Long> deleteTillOffset = lastRedundantOffset();
-        deleteTillOffset.ifPresent(off -> minOffset = off);
+        deleteTillOffset.ifPresent(off -> {
+            minOffset = off;
+            lastRedundant.set(off);
+        });
         return deleteTillOffset;
     }
 
@@ -97,6 +102,10 @@ public class SharePartitionOffsetManager {
         }
 
         return Optional.of(soFar);
+    }
+
+    public AtomicLong lastRedundant() {
+        return lastRedundant;
     }
 
     // visible for testing

@@ -52,7 +52,7 @@ public class ShareCoordinatorConfig {
     public static final String NUM_THREADS_DOC = "The number of threads used by the share coordinator.";
 
     public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG = "share.coordinator.snapshot.update.records.per.snapshot";
-    public static final int SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT = 500;
+    public static final int SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT = 2;
     public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC = "The number of update records the share coordinator writes between snapshot records.";
 
     public static final String WRITE_TIMEOUT_MS_CONFIG = "share.coordinator.write.timeout.ms";

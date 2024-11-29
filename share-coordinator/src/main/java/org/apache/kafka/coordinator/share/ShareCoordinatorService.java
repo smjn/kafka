@@ -47,7 +47,10 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.util.timer.SystemTimer;
+import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
@@ -61,6 +64,7 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -75,6 +79,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorMetrics shareCoordinatorMetrics;
     private volatile int numPartitions = -1; // Number of partitions for __share_group_state. Provided when component is started.
     private final Time time;
+    private final Timer timer = new SystemTimerReaper("share-coordinator-service-timer",
+            new SystemTimer("share-coordinator-service-timer"));
 
     public static class Builder {
         private final int nodeId;
@@ -231,7 +237,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
      */
     @Override
     public void startup(
-        IntSupplier shareGroupTopicPartitionCount
+            IntSupplier shareGroupTopicPartitionCount
     ) {
         if (!isActive.compareAndSet(false, true)) {
             log.warn("Share coordinator is already running.");
@@ -241,6 +247,27 @@ public class ShareCoordinatorService implements ShareCoordinator {
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
         log.info("Startup complete.");
+        setupPartitionPruning();
+    }
+
+    private void setupPartitionPruning() {
+        timer.add(new TimerTask(TimeUnit.MINUTES.toMillis(1L)) {
+            @Override
+            public void run() {
+                // todo: how to handle exceptions?
+                System.err.println("smjn ###########: pruning partitions");
+                for (int i = 0; i < numPartitions; i++) {
+                    runtime.scheduleDeleteOperation(
+                            "share-topic-partition-prune",
+                            new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, i),
+                            ShareCoordinatorShard::maybePrunePartitions
+                    );
+                }
+
+                // infinite recursion for now
+                setupPartitionPruning();
+            }
+        });
     }
 
     @Override

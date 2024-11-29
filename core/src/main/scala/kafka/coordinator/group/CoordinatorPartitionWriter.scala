@@ -19,6 +19,7 @@ package kafka.coordinator.group
 import kafka.cluster.PartitionListener
 import kafka.server.{ReplicaManager, defaultError, genericError}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -164,5 +165,21 @@ class CoordinatorPartitionWriter(
 
     // Required offset.
     partitionResult.lastOffset + 1
+  }
+
+  override def deleteRecords(tp: TopicPartition, deleteUntilOffset: Long): Unit = {
+    var deleteResults: Map[TopicPartition, DeleteRecordsPartitionResult] = Map.empty
+    replicaManager.deleteRecords(
+      timeout = 0L,
+      offsetPerPartition = Map(tp -> deleteUntilOffset),
+      responseCallback = results => deleteResults = results
+    )
+
+    val partitionResult = deleteResults.getOrElse(tp,
+      throw new IllegalStateException(s"Delete status $deleteResults should have partition $tp."))
+
+    if (partitionResult.errorCode() != Errors.NONE.code()) {
+      throw Errors.forCode(partitionResult.errorCode()).exception()
+    }
   }
 }

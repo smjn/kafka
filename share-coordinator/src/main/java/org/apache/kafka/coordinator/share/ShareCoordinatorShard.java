@@ -73,6 +73,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final TimelineHashMap<SharePartitionKey, Integer> snapshotUpdateCount;
     private final TimelineHashMap<SharePartitionKey, Integer> stateEpochMap;
     private MetadataImage metadataImage;
+    private final SharePartitionOffsetManager offsetManager;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
@@ -171,6 +172,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.leaderEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.snapshotUpdateCount = new TimelineHashMap<>(snapshotRegistry, 0);
         this.stateEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.offsetManager = new SharePartitionOffsetManager(snapshotRegistry);
     }
 
     @Override
@@ -195,7 +197,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         switch (key.version()) {
             case ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION: // ShareSnapshot
-                handleShareSnapshot((ShareSnapshotKey) key.message(), (ShareSnapshotValue) messageOrNull(value));
+                handleShareSnapshot((ShareSnapshotKey) key.message(), (ShareSnapshotValue) messageOrNull(value), offset);
                 break;
             case ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION: // ShareUpdate
                 handleShareUpdate((ShareUpdateKey) key.message(), (ShareUpdateValue) messageOrNull(value));
@@ -205,7 +207,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
     }
 
-    private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value) {
+    private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value, long offset) {
         SharePartitionKey mapKey = SharePartitionKey.getInstance(key.groupId(), key.topicId(), key.partition());
         maybeUpdateLeaderEpochMap(mapKey, value.leaderEpoch());
         maybeUpdateStateEpochMap(mapKey, value.stateEpoch());
@@ -219,6 +221,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 snapshotUpdateCount.put(mapKey, 0);
             }
         }
+
+        offsetManager.updateState(mapKey, offset);
     }
 
     private void handleShareUpdate(ShareUpdateKey key, ShareUpdateValue value) {
@@ -531,6 +535,16 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         String message = exception == null ? error.message() : exception.getMessage();
         WriteShareGroupStateResponseData responseData = WriteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, message);
         return new CoordinatorResult<>(Collections.emptyList(), responseData);
+    }
+
+    public Optional<Long> maybePrunePartitions() {
+        System.err.println("smjn######### maybePrunePartitions:");
+        long off = offsetManager.lastRedundant().get();
+        if (off == 0) {
+            return Optional.empty();
+        }
+        System.err.println("smjn######### maybePrunePartitions last redundant:" + off);
+        return Optional.of(off);
     }
 
     // Visible for testing

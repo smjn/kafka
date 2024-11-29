@@ -1176,24 +1176,20 @@ class ReplicaManager(val config: KafkaConfig,
     trace("Delete records on local logs to offsets [%s]".format(offsetPerPartition))
     offsetPerPartition.map { case (topicPartition, requestedOffset) =>
       // reject delete records operation on internal topics
-      if (Topic.isInternal(topicPartition.topic)) {
-        (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(new InvalidTopicException(s"Cannot delete records of internal topic ${topicPartition.topic}"))))
-      } else {
-        try {
-          val partition = getPartitionOrException(topicPartition)
-          val logDeleteResult = partition.deleteRecordsOnLeader(requestedOffset)
-          (topicPartition, logDeleteResult)
-        } catch {
-          case e@ (_: UnknownTopicOrPartitionException |
-                   _: NotLeaderOrFollowerException |
-                   _: OffsetOutOfRangeException |
-                   _: PolicyViolationException |
-                   _: KafkaStorageException) =>
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
-          case t: Throwable =>
-            error("Error processing delete records operation on partition %s".format(topicPartition), t)
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(t)))
-        }
+      try {
+        val partition = getPartitionOrException(topicPartition)
+        val logDeleteResult = partition.deleteRecordsOnLeader(requestedOffset)
+        (topicPartition, logDeleteResult)
+      } catch {
+        case e@(_: UnknownTopicOrPartitionException |
+                _: NotLeaderOrFollowerException |
+                _: OffsetOutOfRangeException |
+                _: PolicyViolationException |
+                _: KafkaStorageException) =>
+          (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
+        case t: Throwable =>
+          error("Error processing delete records operation on partition %s".format(topicPartition), t)
+          (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(t)))
       }
     }
   }

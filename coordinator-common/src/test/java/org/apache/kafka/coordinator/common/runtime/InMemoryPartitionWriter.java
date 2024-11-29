@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.StreamSupport;
 
+
 /**
  * An in-memory partition writer.
  */
@@ -114,6 +115,15 @@ public class InMemoryPartitionWriter implements PartitionWriter {
             state.lock.unlock();
         }
     }
+
+    @Override
+    public void deleteRecords(
+            TopicPartition tp,
+            long deleteUntilOffset
+    ) throws KafkaException {
+        throw new RuntimeException("method not implemented");
+    }
+
 
     @Override
     public CompletableFuture<VerificationGuard> maybeStartTransactionVerification(

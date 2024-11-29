@@ -1769,6 +1769,121 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * A coordinator delete operation.
+     *
+     * @param <S> The type of the coordinator state machine.
+     */
+    public interface CoordinatorDeleteOperation<S> {
+        /**
+         * Generates the response to implement this coordinator read operation. A read
+         * operation received the last committed offset. It must use it to ensure that
+         * it does not read uncommitted data from the timeline data structures.
+         *
+         * @param state     The coordinator state machine.
+         * @throws KafkaException
+         */
+        Optional<Long> generateResponse(S state) throws KafkaException;
+    }
+
+    /**
+     * A coordinator delete event.
+     */
+    class CoordinatorDeleteEvent implements CoordinatorEvent {
+        /**
+         * The topic partition that this delete event is applied to.
+         */
+        final TopicPartition tp;
+
+        /**
+         * The operation name.
+         */
+        final String name;
+
+        /**
+         * The delete operation to execute.
+         */
+        final CoordinatorDeleteOperation<S> op;
+
+        /**
+         * The time this event was created.
+         */
+        private final long createdTimeMs;
+
+        /**
+         * Constructor.
+         *
+         * @param name  The operation name.
+         * @param tp    The topic partition that the operation is applied to.
+         * @param op    The operation.
+         */
+        CoordinatorDeleteEvent(
+                String name,
+                TopicPartition tp,
+                CoordinatorDeleteOperation<S> op
+        ) {
+            this.tp = tp;
+            this.name = name;
+            this.op = op;
+            this.createdTimeMs = time.milliseconds();
+        }
+
+        /**
+         * @return The key used by the CoordinatorEventProcessor to ensure
+         * that events with the same key are not processed concurrently.
+         */
+        @Override
+        public TopicPartition key() {
+            return tp;
+        }
+
+        /**
+         * Called by the CoordinatorEventProcessor when the event is executed.
+         */
+        @Override
+        public void run() {
+            try {
+                // Get the context of the coordinator or fail if the coordinator is not in active state.
+                withActiveContextOrThrow(tp, context -> {
+                    // Execute the delete operation.
+                    Optional<Long> offset = op.generateResponse(context.coordinator.coordinator());
+                    offset.ifPresent(off -> {
+                        partitionWriter.deleteRecords(
+                                tp,
+                                off
+                        );
+                    });
+                    // The response can be completed immediately.
+                    complete(null);
+                });
+            } catch (Throwable t) {
+                complete(t);
+            }
+        }
+
+        /**
+         * Logs any exceptions thrown while the event is executed.
+         *
+         * @param exception The exception.
+         */
+        @Override
+        public void complete(Throwable exception) {
+            if (exception != null) {
+                log.error("Execution of {} failed due to {}.", name, exception.getMessage(), exception);
+            }
+        }
+
+        @Override
+        public long createdTimeMs() {
+            return this.createdTimeMs;
+        }
+
+        @Override
+        public String toString() {
+            return "InternalEvent(name=" + name + ")";
+        }
+    }
+
+    /**
      * Partition listener to be notified when the high watermark of the partitions
      * backing the coordinator are updated.
      */
@@ -2290,6 +2405,22 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     ) {
         log.debug("Scheduled execution of internal operation {}.", name);
         enqueueLast(new CoordinatorInternalEvent(name, tp, op));
+    }
+
+    /**
+     * Schedules a delete event.
+     *
+     * @param name  The name of the write operation.
+     * @param tp    The address of the coordinator (aka its topic-partitions).
+     * @param op    The operation.
+     */
+    public void scheduleDeleteOperation(
+            String name,
+            TopicPartition tp,
+            CoordinatorDeleteOperation<S> op
+    ) {
+        log.debug("Scheduled execution of delete operation {}.", name);
+        enqueueLast(new CoordinatorDeleteEvent(name, tp, op));
     }
 
     /**
