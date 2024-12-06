@@ -360,14 +360,20 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     private List<PersisterStateBatch> mergeBatches(
         List<PersisterStateBatch> soFar,
-        WriteShareGroupStateRequestData.PartitionData partitionData) {
+        WriteShareGroupStateRequestData.PartitionData partitionData
+    ) {
         return mergeBatches(soFar, partitionData, partitionData.startOffset());
     }
 
     private List<PersisterStateBatch> mergeBatches(
         List<PersisterStateBatch> soFar,
         WriteShareGroupStateRequestData.PartitionData partitionData,
-        long startOffset) {
+        long startOffset
+    ) {
+        List<PersisterStateBatch> newBatches = partitionData.stateBatches().stream()
+            .map(PersisterStateBatch::from)
+            .toList();
+
         return new PersisterStateBatchCombiner(
             soFar,
             partitionData.stateBatches().stream()
@@ -375,7 +381,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .collect(Collectors.toList()),
             startOffset
         )
-            .combineStateBatches();
+            .combineStateBatches(shouldOnlyPrune(soFar, newBatches));
     }
 
     /**
@@ -426,14 +432,19 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             );
         }
 
-        List<ReadShareGroupStateResponseData.StateBatch> stateBatches = (offsetValue.stateBatches() != null && !offsetValue.stateBatches().isEmpty()) ?
-            offsetValue.stateBatches().stream().map(
-                stateBatch -> new ReadShareGroupStateResponseData.StateBatch()
-                    .setFirstOffset(stateBatch.firstOffset())
-                    .setLastOffset(stateBatch.lastOffset())
-                    .setDeliveryState(stateBatch.deliveryState())
-                    .setDeliveryCount(stateBatch.deliveryCount())
-            ).collect(java.util.stream.Collectors.toList()) : Collections.emptyList();
+        List<ReadShareGroupStateResponseData.StateBatch> stateBatches = Collections.emptyList();
+
+        if (offsetValue.stateBatches() != null && !offsetValue.stateBatches().isEmpty()) {
+            stateBatches = new PersisterStateBatchCombiner(Collections.emptyList(), offsetValue.stateBatches(), offsetValue.startOffset())
+                .combineStateBatches(false).stream()
+                .map(
+                    stateBatch -> new ReadShareGroupStateResponseData.StateBatch()
+                        .setFirstOffset(stateBatch.firstOffset())
+                        .setLastOffset(stateBatch.lastOffset())
+                        .setDeliveryState(stateBatch.deliveryState())
+                        .setDeliveryCount(stateBatch.deliveryCount())
+                ).toList();
+        }
 
         // Updating the leader map with the new leader epoch
         leaderEpochMap.put(coordinatorKey, leaderEpoch);
@@ -557,6 +568,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // snapshot epoch should be same as last share snapshot
         // state epoch is not present
         List<PersisterStateBatch> currentBatches = soFar.stateBatches();
+        List<PersisterStateBatch> newBatches = newData.stateBatches().stream()
+            .map(ShareCoordinatorShard::toPersisterStateBatch)
+                .toList();
+
         long newStartOffset = newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset();
         int newLeaderEpoch = newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch();
 
@@ -565,10 +580,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStateEpoch(soFar.stateEpoch())
             .setStartOffset(newStartOffset)
             .setLeaderEpoch(newLeaderEpoch)
-            .setStateBatches(new PersisterStateBatchCombiner(currentBatches, newData.stateBatches().stream()
-                .map(ShareCoordinatorShard::toPersisterStateBatch)
-                .collect(Collectors.toList()), newStartOffset)
-                .combineStateBatches())
+            .setStateBatches(new PersisterStateBatchCombiner(currentBatches, newBatches, newStartOffset)
+                .combineStateBatches(shouldOnlyPrune(currentBatches, newBatches)))
             .build();
     }
 
@@ -594,5 +607,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             batch.deliveryState(),
             batch.deliveryCount()
         );
+    }
+
+    private static boolean shouldOnlyPrune(List<PersisterStateBatch> batch1, List<PersisterStateBatch> batch2) {
+        return batch1.size() + batch2.size() <= 500;
     }
 }

@@ -392,7 +392,7 @@ public class PersisterStateBatchCombinerTest {
                     test.batchesSoFar,
                     test.newBatches,
                     test.startOffset)
-                    .combineStateBatches(),
+                    .combineStateBatches(false),
                 test.testName
             );
         }
@@ -407,7 +407,7 @@ public class PersisterStateBatchCombinerTest {
                     test.batchesSoFar,
                     test.newBatches,
                     test.startOffset)
-                    .combineStateBatches(),
+                    .combineStateBatches(false),
                 test.testName
             );
         }
@@ -422,7 +422,7 @@ public class PersisterStateBatchCombinerTest {
                     test.batchesSoFar,
                     test.newBatches,
                     test.startOffset)
-                    .combineStateBatches(),
+                    .combineStateBatches(false),
                 test.testName
             );
         }
@@ -437,7 +437,7 @@ public class PersisterStateBatchCombinerTest {
                     test.batchesSoFar,
                     test.newBatches,
                     test.startOffset)
-                    .combineStateBatches(),
+                    .combineStateBatches(false),
                 test.testName
             );
         }
