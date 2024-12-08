@@ -85,8 +85,11 @@ public class PersisterStateBatchCombiner {
      * @return list of {@link PersisterStateBatch} representing non-overlapping combined batches
      */
     public List<PersisterStateBatch> combineStateBatches(boolean pruneOnly) {
+        if(combinedBatchList.isEmpty() || combinedBatchList.size() == 1) {
+            return combinedBatchList;
+        }
+        pruneBatches();
         if (pruneOnly) {
-            pruneBatches();
             return combinedBatchList;
         }
         int estimatedResultSize = (combinedBatchList.size() * 3) / 2;   // heuristic size - 50% overallocation
