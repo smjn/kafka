@@ -610,6 +610,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     private static boolean shouldOnlyPrune(List<PersisterStateBatch> batch1, List<PersisterStateBatch> batch2) {
-        return batch1.size() + batch2.size() <= 500;
+        return batch1.size() + batch2.size() <= 250;
     }
 }
