@@ -146,6 +146,7 @@ public class OAuthBearerRefreshingLogin implements Login {
 
     @Override
     public synchronized LoginContext login() throws LoginException {
+        log.info("====Refreshing login called.");
         if (expiringCredentialRefreshingLogin != null)
             return expiringCredentialRefreshingLogin.login();
         throw new LoginException("Login was not configured properly");

@@ -202,7 +202,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
     public LoginContext login() throws LoginException {
         LoginContext tmpLoginContext = loginContextFactory.createLoginContext(this);
         tmpLoginContext.login();
-        log.info("Successfully logged in.");
+        log.info("====Successfully logged in.");
         loginContext = tmpLoginContext;
         subject = loginContext.getSubject();
         expiringCredential = expiringCredential();

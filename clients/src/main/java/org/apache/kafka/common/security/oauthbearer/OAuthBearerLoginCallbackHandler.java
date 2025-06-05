@@ -240,10 +240,13 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
         checkInitialized();
+        log.info("====Starting token retrieval.");
+        long start = System.currentTimeMillis();
         String accessToken = accessTokenRetriever.retrieve();
 
         try {
             OAuthBearerToken token = accessTokenValidator.validate(accessToken);
+            log.info("====Token retrieval in {} ms", System.currentTimeMillis() - start);
             callback.token(token);
         } catch (ValidateException e) {
             log.warn(e.getMessage(), e);
