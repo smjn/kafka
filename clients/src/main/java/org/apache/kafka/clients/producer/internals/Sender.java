@@ -199,6 +199,7 @@ public class Sender implements Runnable {
                         // exception will be thrown if the invariant is violated.
                         if (!batch.isDone()) {
                             expiredBatches.add(batch);
+                            log.info("===Tp for expired batch {}", entry.getKey());
                         } else {
                             throw new IllegalStateException(batch.topicPartition + " batch created at " +
                                 batch.createdMs + " gets unexpected final state " + batch.finalState());
@@ -392,6 +393,7 @@ public class Sender implements Runnable {
                 this.accumulator.updateNodeLatencyStats(node.id(), now, false);
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
+                log.info("===Client not ready for node not ready {} - {}", node, now);
             } else {
                 // Update both readyTimeMs and drainTimeMs, this would "reset" the node
                 // latency.
@@ -420,6 +422,7 @@ public class Sender implements Runnable {
         // we need to reset the producer id here.
         if (!expiredBatches.isEmpty()) {
             log.info("===Expired {} batches in accumulator, of these {} were in-flight", expiredBatches.size(), expiredInflightBatches.size());
+            log.info("===Ready nodes: {}", result.readyNodes);
         }
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
