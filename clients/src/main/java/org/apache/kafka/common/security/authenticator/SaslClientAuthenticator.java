@@ -240,6 +240,7 @@ public class SaslClientAuthenticator implements Authenticator {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
 
+        log.info("===SCA sasl state {}", saslState);
         switch (saslState) {
             case SEND_APIVERSIONS_REQUEST:
                 // Always use version 0 request since brokers treat requests with schema exceptions as GSSAPI tokens
@@ -494,6 +495,9 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     public boolean complete() {
+        if (saslState != SaslState.COMPLETE) {
+            log.info("===sasl state {}", saslState);
+        }
         return saslState == SaslState.COMPLETE;
     }
 
@@ -529,10 +533,15 @@ public class SaslClientAuthenticator implements Authenticator {
             throw new IllegalSaslStateException("Error authenticating with the Kafka Broker: received a `null` saslToken.");
 
         try {
-            if (isInitial && !saslClient.hasInitialResponse())
+            log.info("===SCA Create sasl token ");
+            if (isInitial && !saslClient.hasInitialResponse()) {
+                log.info("===SCA initial ");
                 return saslToken;
-            else
+            }
+            else {
+                log.info("===SCA privileged");
                 return Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
+            }
         } catch (PrivilegedActionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             KerberosError kerberosError = KerberosError.fromException(e);

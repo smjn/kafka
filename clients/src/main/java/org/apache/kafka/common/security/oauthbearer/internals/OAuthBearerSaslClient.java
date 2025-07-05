@@ -99,14 +99,14 @@ public class OAuthBearerSaslClient implements SaslClient {
                     if (challenge != null && challenge.length != 0) {
                         String jsonErrorResponse = new String(challenge, StandardCharsets.UTF_8);
                         if (log.isDebugEnabled())
-                            log.debug("Sending %%x01 response to server after receiving an error: {}",
+                            log.info("Sending %%x01 response to server after receiving an error: {}",
                                     jsonErrorResponse);
                         setState(State.RECEIVE_SERVER_MESSAGE_AFTER_FAILURE);
                         return new byte[] {BYTE_CONTROL_A};
                     }
                     callbackHandler().handle(new Callback[] {callback});
                     if (log.isDebugEnabled())
-                        log.debug("Successfully authenticated as {}", callback.token().principalName());
+                        log.info("Successfully authenticated as {}", callback.token().principalName());
                     setState(State.COMPLETE);
                     return null;
                 default:
@@ -152,7 +152,7 @@ public class OAuthBearerSaslClient implements SaslClient {
     }
 
     private void setState(State state) {
-        log.debug("Setting SASL/{} client state to {}", OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, state);
+        log.info("===Setting SASL/{} client state to {}", OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, state);
         this.state = state;
     }
 
@@ -161,7 +161,7 @@ public class OAuthBearerSaslClient implements SaslClient {
         try {
             callbackHandler().handle(new Callback[] {extensionsCallback});
         } catch (UnsupportedCallbackException e) {
-            log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
+            log.info("Extensions callback is not supported by client callback handler {}, no extensions will be added",
                     callbackHandler());
         } catch (Exception e) {
             throw new SaslException("SASL extensions could not be obtained", e);

@@ -561,7 +561,7 @@ public class Selector implements Selectable, AutoCloseable {
                             if (!channel.connectedClientSupportsReauthentication())
                                 sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
                         }
-                        log.debug("Successfully {}authenticated with {}", isReauthentication ?
+                        log.info("===Successfully {}authenticated with {}", isReauthentication ?
                             "re-" : "", channel.socketDescription());
                     }
                 }
