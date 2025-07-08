@@ -393,7 +393,7 @@ public class Sender implements Runnable {
                 this.accumulator.updateNodeLatencyStats(node.id(), now, false);
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
-//                log.info("===Client not ready for node not ready {} - {}", node, now);
+//                log.info("===Client not ready for node {} - {}", node, now);
             } else {
                 // Update both readyTimeMs and drainTimeMs, this would "reset" the node
                 // latency.

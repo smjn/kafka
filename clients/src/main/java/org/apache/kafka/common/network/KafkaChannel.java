@@ -674,8 +674,10 @@ public class KafkaChannel implements AutoCloseable {
             throws IOException {
         // it is up to the new authenticator to close the old one
         // replace with a new one and begin the process of re-authenticating
+        System.out.println("====KafkaChannel: Old authenticator " + authenticator);
         authenticator = authenticatorCreator.get();
         authenticator.reauthenticate(reauthenticationContext);
+        System.out.println("====KafkaChannel: New authenticator " + authenticator);
     }
 
     public ChannelMetadataRegistry channelMetadataRegistry() {

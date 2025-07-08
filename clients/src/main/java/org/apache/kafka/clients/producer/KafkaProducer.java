@@ -1250,7 +1250,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void flush() {
-        log.trace("Flushing accumulated records in producer.");
+        log.info("Flushing accumulated records in producer.");
 
         long start = time.nanoseconds();
         this.accumulator.beginFlush();

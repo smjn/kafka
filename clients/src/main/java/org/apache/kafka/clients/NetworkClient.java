@@ -483,7 +483,7 @@ public class NetworkClient implements KafkaClient {
         boolean inflight = inFlightRequests.canSendMore(node);
         boolean result = state && select && inflight;
         if (!result) {
-            log.info("===cannot send {} {} {}", state, select, inflight);
+            log.info("===cannot send to node:{} - connectionState:{} channelReady:{} inflight:{}", node, state, select, inflight);
         }
         return result;
     }
@@ -1074,7 +1074,7 @@ public class NetworkClient implements KafkaClient {
         try {
             connectionStates.connecting(nodeConnectionId, now, node.host());
             InetAddress address = connectionStates.currentAddress(nodeConnectionId);
-            log.debug("Initiating connection to node {} using address {}", node, address);
+            log.info("===Initiating connection to node {} using address {}", node, address);
             selector.connect(nodeConnectionId,
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,

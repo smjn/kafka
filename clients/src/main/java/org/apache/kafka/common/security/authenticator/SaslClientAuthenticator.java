@@ -215,7 +215,7 @@ public class SaslClientAuthenticator implements Authenticator {
         try {
             return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
                 String[] mechs = {mechanism};
-                log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
+                log.info("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
                 SaslClient retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
                 if (retvalSaslClient == null) {
@@ -410,7 +410,7 @@ public class SaslClientAuthenticator implements Authenticator {
         else {
             this.pendingSaslState = null;
             this.saslState = saslState;
-            log.debug("Set SASL client state to {}", saslState);
+            log.info("Set SASL client state to {}", saslState);
             if (saslState == SaslState.COMPLETE) {
                 reauthInfo.setAuthenticationEndAndSessionReauthenticationTimes(time.nanoseconds());
                 if (!reauthInfo.reauthenticating())
@@ -496,7 +496,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
     public boolean complete() {
         if (saslState != SaslState.COMPLETE) {
-            log.info("===sasl state {}", saslState);
+            log.info("===sasl state {}, instance id -{}", saslState, this);
         }
         return saslState == SaslState.COMPLETE;
     }
@@ -601,7 +601,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 reauthInfo.pendingAuthenticatedReceives.add(receive);
                 return null;
             }
-            log.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
+            log.info("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
             setSaslState(SaslState.FAILED);
             throw new IllegalSaslStateException("Invalid SASL mechanism response, server may be expecting a different protocol", e);
         }
@@ -700,11 +700,11 @@ public class SaslClientAuthenticator implements Authenticator {
                         * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
                 sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs * pctToUse);
                 clientSessionReauthenticationTimeNanos = authenticationEndNanos + 1000 * 1000 * sessionLifetimeMsToUse;
-                log.debug(
+                log.info(
                         "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
                         authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse);
             } else
-                log.debug("Finished {} with no session expiration and no session re-authentication",
+                log.info("Finished {} with no session expiration and no session re-authentication",
                         authenticationOrReauthenticationText());
         }
 
