@@ -516,7 +516,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
                 long sessionLifetimeMs = response.sessionLifetimeMs();
                 if (sessionLifetimeMs > 0L)
-                    reauthInfo.positiveSessionLifetimeMs = sessionLifetimeMs;
+                    reauthInfo.positiveSessionLifetimeMs = 8 * 60 * 1000 + (long) (Math.random() * 100); //sessionLifetimeMs;
                 return Utils.copyArray(response.saslAuthBytes());
             } else
                 return null;

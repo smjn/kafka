@@ -418,8 +418,10 @@ public class Sender implements Runnable {
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
         // we need to reset the producer id here.
-        if (!expiredBatches.isEmpty())
-            log.trace("Expired {} batches in accumulator", expiredBatches.size());
+        if (!expiredBatches.isEmpty()) {
+            log.info("==== thread {}", Thread.currentThread().getName());
+            log.info("Expired {} batches in accumulator of which inflight {}", expiredBatches.size(), expiredInflightBatches.size());
+        }
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
                 + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
