@@ -458,9 +458,9 @@ public class SaslClientAuthenticator implements Authenticator {
                     send = request.toSend(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
                 long startTime = System.currentTimeMillis();
-                log.info("====before send sasl token");
+                log.info("====before send sasl token {}", node);
                 send(send);
-                log.info("====after send sasl token {}", System.currentTimeMillis() - startTime);
+                log.info("====after send sasl token {} {}", node, System.currentTimeMillis() - startTime);
                 return true;
             }
         }
