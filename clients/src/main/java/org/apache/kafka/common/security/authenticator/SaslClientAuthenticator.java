@@ -73,6 +73,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SaslClientAuthenticator implements Authenticator {
     /**
@@ -167,6 +168,11 @@ public class SaslClientAuthenticator implements Authenticator {
     // Version of SaslHandshake request/responses
     private short saslHandshakeVersion;
 
+    private long start = -1;
+
+    private static AtomicInteger runId = new AtomicInteger(0);
+    private long localId = -1;
+
     @SuppressWarnings("this-escape")
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
@@ -240,6 +246,7 @@ public class SaslClientAuthenticator implements Authenticator {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
 
+        log.info("====sasl state {} {} {}", saslState, node, localId);
         switch (saslState) {
             case SEND_APIVERSIONS_REQUEST:
                 // Always use version 0 request since brokers treat requests with schema exceptions as GSSAPI tokens
@@ -335,6 +342,9 @@ public class SaslClientAuthenticator implements Authenticator {
 
     @Override
     public void reauthenticate(ReauthenticationContext reauthenticationContext) throws IOException {
+        localId = runId.incrementAndGet();
+        log.info("=====reauthenticate start node:{} localId:{}", node, localId);
+        start = System.currentTimeMillis();
         SaslClientAuthenticator previousSaslClientAuthenticator = (SaslClientAuthenticator) Objects
                 .requireNonNull(reauthenticationContext).previousAuthenticator();
         ApiVersionsResponse apiVersionsResponseFromOriginalAuthentication = previousSaslClientAuthenticator.reauthInfo
@@ -346,6 +356,7 @@ public class SaslClientAuthenticator implements Authenticator {
         netInBuffer = netInBufferFromChannel;
         setSaslState(SaslState.REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE); // Will set immediately
         authenticate();
+
     }
 
     @Override
@@ -422,6 +433,9 @@ public class SaslClientAuthenticator implements Authenticator {
                     transportLayer.addInterestOps(SelectionKey.OP_WRITE);
             }
         }
+        if (saslState == SaslState.COMPLETE) {
+            log.info("======reauth total time localId:{} node:{} time:{}", localId, node, System.currentTimeMillis() - start);
+        }
     }
 
     /**
@@ -443,7 +457,10 @@ public class SaslClientAuthenticator implements Authenticator {
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
                     send = request.toSend(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
+                long startTime = System.currentTimeMillis();
+                log.info("====before send sasl token");
                 send(send);
+                log.info("====after send sasl token {}", System.currentTimeMillis() - startTime);
                 return true;
             }
         }
@@ -531,8 +548,13 @@ public class SaslClientAuthenticator implements Authenticator {
         try {
             if (isInitial && !saslClient.hasInitialResponse())
                 return saslToken;
-            else
-                return Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
+            else {
+                long st = System.currentTimeMillis();
+                log.info("====calling eval challenge {}", node);
+                byte[] result = Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
+                log.info("====calling eval challenge {} {}", node, System.currentTimeMillis() - st);
+                return result;
+            }
         } catch (PrivilegedActionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             KerberosError kerberosError = KerberosError.fromException(e);

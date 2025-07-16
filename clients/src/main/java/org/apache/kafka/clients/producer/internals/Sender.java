@@ -69,6 +69,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -128,6 +131,8 @@ public class Sender implements Runnable {
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
+    private ScheduledExecutorService scheduler;
+
     public Sender(LogContext logContext,
                   KafkaClient client,
                   ProducerMetadata metadata,
@@ -158,6 +163,10 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
+        this.scheduler = new ScheduledThreadPoolExecutor(1);
+        this.scheduler.scheduleAtFixedRate(() -> log.info("===Accumulator state {} {}", this.accumulator.hasIncomplete(), this.accumulator.hasUndrained()),
+            5, 5, TimeUnit.SECONDS);
+
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {

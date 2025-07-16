@@ -85,10 +85,10 @@ public class OAuthBearerSaslClient implements SaslClient {
     @Override
     public byte[] evaluateChallenge(byte[] challenge) throws SaslException {
         log.info("==== thread {}", Thread.currentThread().getName());
-        log.info("===eval challenge {}", System.currentTimeMillis() - start);
         start = System.currentTimeMillis();
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+            log.info("====state {}", state);
             switch (state) {
                 case SEND_CLIENT_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0)
@@ -97,8 +97,6 @@ public class OAuthBearerSaslClient implements SaslClient {
                     SaslExtensions extensions = retrieveCustomExtensions();
 
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
-                    log.info("===SEND_CLIENT_FIRST_MESSAGE {}", System.currentTimeMillis() - start);
-                    start = System.currentTimeMillis();
 
                     return new OAuthBearerClientInitialResponse(callback.token().value(), extensions).toBytes();
                 case RECEIVE_SERVER_FIRST_MESSAGE:
@@ -108,16 +106,12 @@ public class OAuthBearerSaslClient implements SaslClient {
                             log.debug("Sending %%x01 response to server after receiving an error: {}",
                                     jsonErrorResponse);
                         setState(State.RECEIVE_SERVER_MESSAGE_AFTER_FAILURE);
-                        log.info("===RECEIVE_SERVER_MESSAGE_AFTER_FAILURE {}", System.currentTimeMillis() - start);
-                        start = System.currentTimeMillis();
                         return new byte[] {BYTE_CONTROL_A};
                     }
                     callbackHandler().handle(new Callback[] {callback});
                     if (log.isDebugEnabled())
                         log.debug("Successfully authenticated as {}", callback.token().principalName());
                     setState(State.COMPLETE);
-                    log.info("===RECEIVE_SERVER_FIRST_MESSAGE setting complete {}", System.currentTimeMillis() - start);
-                    start = System.currentTimeMillis();
                     return null;
                 default:
                     throw new IllegalSaslStateException("Unexpected challenge in Sasl client state " + state);

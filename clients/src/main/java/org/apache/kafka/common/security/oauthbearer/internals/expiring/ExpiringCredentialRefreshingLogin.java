@@ -387,7 +387,9 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
                 log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
                         principalName, optionalCredentialToLogout != null);
+                long startMs = System.currentTimeMillis();
                 loginContext.login();
+                log.info("=====login took {}", System.currentTimeMillis() - startMs);
                 cleanLogin = true; // no need to restore the original
                 // Perform a logout() on any original credential if necessary
                 if (optionalCredentialToLogout != null)
