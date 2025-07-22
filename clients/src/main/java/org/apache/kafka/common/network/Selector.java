@@ -455,7 +455,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (!memoryPool.isOutOfMemory() && outOfMemory) {
             //we have recovered from memory pressure. unmute any channel not explicitly muted for other reasons
-            log.trace("Broker no longer low on memory - unmuting incoming sockets");
+            log.info("Broker no longer low on memory - unmuting incoming sockets");
             for (KafkaChannel channel : channels.values()) {
                 if (channel.isInMutableState() && !explicitlyMutedChannels.contains(channel)) {
                     channel.maybeUnmute();
@@ -472,7 +472,18 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
-
+            Set<SelectionKey> keys = new HashSet<>(this.nioSelector.keys());
+            keys.removeAll(readyKeys);
+            for (SelectionKey key : keys) {
+                KafkaChannel channel = channel(key);
+                if (channel.isFirstCompleteReceivedAfterReauth()) {
+                    log.info("Selector poll() non-ready1 channel.id:" + channel.id() + " channel.ready() " + channel.ready()
+                            + " key.isReadable() " + key.isReadable() + " channel.hasBytesBuffered() "
+                            + channel.hasBytesBuffered() + " hasCompletedReceive(channel) "
+                            + hasCompletedReceive(channel) + " explicitlyMutedChannels.contains(channel) "
+                            + explicitlyMutedChannels.contains(channel));
+                }
+            }
             // Poll from channels that have buffered data (but nothing more from the underlying socket)
             if (dataInBuffers) {
                 keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
@@ -489,6 +500,16 @@ public class Selector implements Selectable, AutoCloseable {
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
             immediatelyConnectedKeys.clear();
         } else {
+            for (SelectionKey key : this.nioSelector.keys()) {
+                KafkaChannel channel = channel(key);
+                if (channel.isFirstCompleteReceivedAfterReauth()) {
+                    log.info("Selector poll() non-ready2 channel.id:" + channel.id() + " channel.ready() " + channel.ready()
+                            + " key.isReadable() " + key.isReadable() + " channel.hasBytesBuffered() "
+                            + channel.hasBytesBuffered() + " hasCompletedReceive(channel) "
+                            + hasCompletedReceive(channel) + " explicitlyMutedChannels.contains(channel) "
+                            + explicitlyMutedChannels.contains(channel));
+                }
+            }
             madeReadProgressLastPoll = true; //no work is also "progress"
         }
 
@@ -549,6 +570,7 @@ public class Selector implements Selectable, AutoCloseable {
                         long readyTimeMs = time.milliseconds();
                         boolean isReauthentication = channel.successfulAuthentications() > 1;
                         if (isReauthentication) {
+                            System.out.println("===Pending Responses in Re-authenticating channel " + channel.pollResponseCountReceivedDuringReauthentication());
                             sensors.successfulReauthentication.record(1.0, readyTimeMs);
                             if (channel.reauthenticationLatencyMs() == null)
                                 log.warn(
@@ -570,11 +592,17 @@ public class Selector implements Selectable, AutoCloseable {
                 Optional<NetworkReceive> responseReceivedDuringReauthentication = channel.pollResponseReceivedDuringReauthentication();
                 responseReceivedDuringReauthentication.ifPresent(receive -> {
                     long currentTimeMs = time.milliseconds();
+                    System.out.println("===Processing Response received during re-authentication for channel " + channel.id() + ": " + receive.size());
                     addToCompletedReceives(channel, receive, currentTimeMs);
                 });
 
                 //if channel is ready and has bytes to read from socket or buffer, and has no
                 //previous completed receive then read from it
+                if (channel.isFirstCompleteReceivedAfterReauth()) {
+                    log.info("Selector attemptRead check channel.id:" + channel.id() + " channel.ready() " + channel.ready() + " key.isReadable() "
+                            + key.isReadable() + " channel.hasBytesBuffered() " + channel.hasBytesBuffered() + " hasCompletedReceive(channel) "
+                            + hasCompletedReceive(channel) + " explicitlyMutedChannels.contains(channel) " + explicitlyMutedChannels.contains(channel));
+                }
                 if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasCompletedReceive(channel)
                         && !explicitlyMutedChannels.contains(channel)) {
                     attemptRead(channel);
@@ -687,6 +715,7 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
         if (channel.isMuted()) {
+            System.out.println("===Channel " + channel.id() + " has muted itself due to memory pressure");
             outOfMemory = true; //channel has muted itself due to memory pressure.
         } else {
             madeReadProgressLastPoll = true;
@@ -939,7 +968,7 @@ public class Selector implements Selectable, AutoCloseable {
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
         if (closeMode == CloseMode.GRACEFUL && maybeReadFromClosingChannel(channel)) {
             closingChannels.put(channel.id(), channel);
-            log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
+            log.info("Tracking closing connection {} to process outstanding requests", channel.id());
         } else {
             doClose(channel, closeMode.notifyDisconnect);
         }
@@ -955,6 +984,8 @@ public class Selector implements Selectable, AutoCloseable {
     private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
         SelectionKey key = channel.selectionKey();
         try {
+            System.out.println("===Pending Responses in closing channel " + channel.pollResponseCountReceivedDuringReauthentication());
+            System.out.println("===Pending Send in closing channel " + channel.hasSendNotCompleted());
             immediatelyConnectedKeys.remove(key);
             keysWithBufferedRead.remove(key);
             channel.close();

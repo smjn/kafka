@@ -116,7 +116,7 @@ public class KafkaChannel implements AutoCloseable {
     private final String id;
     private final TransportLayer transportLayer;
     private final Supplier<Authenticator> authenticatorCreator;
-    private Authenticator authenticator;
+    private volatile Authenticator authenticator;
     // Tracks accumulated network thread time. This is updated on the network thread.
     // The values are read and reset after each response is sent.
     private long networkThreadTimeNanos;
@@ -134,6 +134,14 @@ public class KafkaChannel implements AutoCloseable {
     private int successfulAuthentications;
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
+    private volatile boolean firstSendAfterReauth;
+    private volatile boolean mayBefirstSendAfterReauth;
+    private volatile boolean secondfirstSendAfterReauth;
+
+    private volatile boolean firstReviev;
+
+    private volatile boolean firstCompleteReceivedAfterReauth;
+    private volatile boolean secondCompleteReceivedAfterReauth;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
                         int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
@@ -359,6 +367,10 @@ public class KafkaChannel implements AutoCloseable {
         return send != null;
     }
 
+    public boolean hasSendNotCompleted() {
+        return (send != null && !send.completed());
+    }
+
     /**
      * Returns the address to which this channel's socket is connected or `null` if the socket has never been connected.
      *
@@ -391,6 +403,10 @@ public class KafkaChannel implements AutoCloseable {
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
         this.send = send;
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+        if (firstSendAfterReauth) {
+            System.out.println("== Set send for channel " + id + ", send: " + send + " " + send.size());
+            firstSendAfterReauth = false;
+        }
     }
 
     public NetworkSend maybeCompleteSend() {
@@ -399,6 +415,14 @@ public class KafkaChannel implements AutoCloseable {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             NetworkSend result = send;
             send = null;
+            if (mayBefirstSendAfterReauth) {
+                System.out.println("== maybeCompleteSend first send for channel " + id + ", send: " + result + " " + result.size());
+                mayBefirstSendAfterReauth = false;
+                secondfirstSendAfterReauth = true;
+            } else if (secondfirstSendAfterReauth) {
+                System.out.println("== maybeCompleteSend second send for channel " + id + ", send: " + result + " " + result.size());
+                secondfirstSendAfterReauth = false;
+            }
             return result;
         }
         return null;
@@ -413,7 +437,14 @@ public class KafkaChannel implements AutoCloseable {
 
         if (this.receive.requiredMemoryAmountKnown() && !this.receive.memoryAllocated() && isInMutableState()) {
             //pool must be out of memory, mute ourselves.
+            System.out.println("==muting channel " + id + " due to insufficient memory for receive: " + this.receive);
             mute();
+        }
+        if (firstCompleteReceivedAfterReauth) {
+            System.out.println("==read first receive for channel " + id + ", bytesReceived: " +bytesReceived);
+        } else if (secondCompleteReceivedAfterReauth) {
+            System.out.println("==read second receive for channel " + id + ", bytesReceived: " +bytesReceived);
+
         }
         return bytesReceived;
     }
@@ -427,9 +458,21 @@ public class KafkaChannel implements AutoCloseable {
             receive.payload().rewind();
             NetworkReceive result = receive;
             receive = null;
+            if (firstCompleteReceivedAfterReauth) {
+                System.out.println("== maybeCompleteReceive first receive for channel " + id + ", receive: " + result + " " + result.bytesRead());
+                firstCompleteReceivedAfterReauth = false;
+                secondCompleteReceivedAfterReauth = true;
+            } else if (secondCompleteReceivedAfterReauth) {
+                System.out.println("== maybeCompleteReceive second receive for channel " + id + ", receive: " + result + " " + result.bytesRead());
+                secondCompleteReceivedAfterReauth = false;
+            }
             return result;
         }
         return null;
+    }
+
+    public boolean isFirstCompleteReceivedAfterReauth() {
+        return firstCompleteReceivedAfterReauth;
     }
 
     public long write() throws IOException {
@@ -610,6 +653,9 @@ public class KafkaChannel implements AutoCloseable {
         if (nowNanos < authenticator.clientSessionReauthenticationTimeNanos())
             return false;
         swapAuthenticatorsAndBeginReauthentication(new ReauthenticationContext(authenticator, receive, nowNanos));
+        firstSendAfterReauth = true;
+        mayBefirstSendAfterReauth = true;
+        firstCompleteReceivedAfterReauth = true;
         receive = null;
         return true;
     }
@@ -658,7 +704,12 @@ public class KafkaChannel implements AutoCloseable {
     public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
         return authenticator.pollResponseReceivedDuringReauthentication();
     }
-    
+
+    public int pollResponseCountReceivedDuringReauthentication() {
+        return authenticator.pollResponseCountReceivedDuringReauthentication();
+    }
+
+
     /**
      * Return true if this is a server-side channel and the connected client has
      * indicated that it supports re-authentication, otherwise false
@@ -675,6 +726,9 @@ public class KafkaChannel implements AutoCloseable {
         // it is up to the new authenticator to close the old one
         // replace with a new one and begin the process of re-authenticating
         authenticator = authenticatorCreator.get();
+        System.out.println("===Re-authenticating channel " + id + " with new authenticator: " + authenticator);
+        if (send != null && !send.completed())
+            System.out.println("===Pending Send on channel " + id + ": " + send + "  send.completed: " + send.completed());
         authenticator.reauthenticate(reauthenticationContext);
     }
 

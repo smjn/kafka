@@ -156,7 +156,7 @@ public class OAuthBearerSaslClient implements SaslClient {
     }
 
     private void setState(State state) {
-        log.debug("Setting SASL/{} client state to {}", OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, state);
+        log.info("Setting SASL/{} client state to {}", OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, state);
         this.state = state;
     }
 

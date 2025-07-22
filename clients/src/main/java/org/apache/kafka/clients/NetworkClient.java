@@ -361,10 +361,10 @@ public class NetworkClient implements KafkaClient {
                     request.throttleTimeMs(), request.requestTimeoutMs, request.request);
             } else {
                 log.info("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
-                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, throttle time: {}ms, request timeout: {}ms)",
-                    request.header.apiKey(), request.header.correlationId(), nodeId,
-                    request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
-                    request.throttleTimeMs(), request.requestTimeoutMs);
+                                "(elapsed time since creation: {}ms, elapsed time since send: {}ms, throttle time: {}ms, request timeout: {}ms): {}",
+                        request.header.apiKey(), request.header.correlationId(), nodeId,
+                        request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
+                        request.throttleTimeMs(), request.requestTimeoutMs, request);
             }
 
             if (!request.isInternalRequest) {

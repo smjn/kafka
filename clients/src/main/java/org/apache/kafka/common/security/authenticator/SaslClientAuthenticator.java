@@ -246,7 +246,7 @@ public class SaslClientAuthenticator implements Authenticator {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
 
-        log.info("====sasl state {} {} {}", saslState, node, localId);
+        log.info("====sasl state {} node {} localId {}", saslState, node, localId);
         switch (saslState) {
             case SEND_APIVERSIONS_REQUEST:
                 // Always use version 0 request since brokers treat requests with schema exceptions as GSSAPI tokens
@@ -365,6 +365,11 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     @Override
+    public int pollResponseCountReceivedDuringReauthentication() {
+        return reauthInfo.pendingAuthenticatedReceives.size();
+    }
+
+    @Override
     public Long clientSessionReauthenticationTimeNanos() {
         return reauthInfo.clientSessionReauthenticationTimeNanos;
     }
@@ -420,7 +425,7 @@ public class SaslClientAuthenticator implements Authenticator {
         else {
             this.pendingSaslState = null;
             this.saslState = saslState;
-            log.debug("Set SASL client state to {}", saslState);
+            log.info("Set SASL client state to {}", saslState);
             if (saslState == SaslState.COMPLETE) {
                 reauthInfo.setAuthenticationEndAndSessionReauthenticationTimes(time.nanoseconds());
                 if (!reauthInfo.reauthenticating())
@@ -458,9 +463,9 @@ public class SaslClientAuthenticator implements Authenticator {
                     send = request.toSend(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
                 long startTime = System.currentTimeMillis();
-                log.info("====before send sasl token {}", node);
+                log.info("====before send sasl token node {}", node);
                 send(send);
-                log.info("====after send sasl token {} {}", node, System.currentTimeMillis() - startTime);
+                log.info("====after send sasl token node {} time {}", node, System.currentTimeMillis() - startTime);
                 return true;
             }
         }
@@ -533,7 +538,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
                 long sessionLifetimeMs = response.sessionLifetimeMs();
                 if (sessionLifetimeMs > 0L)
-                    reauthInfo.positiveSessionLifetimeMs = 8*60*1000 + (long) (Math.random() * 100); //sessionLifetimeMs;
+                    reauthInfo.positiveSessionLifetimeMs = sessionLifetimeMs;
                 return Utils.copyArray(response.saslAuthBytes());
             } else
                 return null;
@@ -550,9 +555,9 @@ public class SaslClientAuthenticator implements Authenticator {
                 return saslToken;
             else {
                 long st = System.currentTimeMillis();
-                log.info("====calling eval challenge {}", node);
+                log.info("====calling eval challenge node {}", node);
                 byte[] result = Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
-                log.info("====calling eval challenge {} {}", node, System.currentTimeMillis() - st);
+                log.info("====calling eval challenge node {} time: {}", node, System.currentTimeMillis() - st);
                 return result;
             }
         } catch (PrivilegedActionException e) {
@@ -612,6 +617,8 @@ public class SaslClientAuthenticator implements Authenticator {
                  */
                 receive.payload().rewind();
                 reauthInfo.pendingAuthenticatedReceives.add(receive);
+                System.out.println("===Received response during re-authentication that is unrelated to re-authentication, " +
+                        "will process it later: " + reauthInfo.pendingAuthenticatedReceives.size());
                 return null;
             }
             log.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
@@ -713,11 +720,11 @@ public class SaslClientAuthenticator implements Authenticator {
                         * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
                 sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs * pctToUse);
                 clientSessionReauthenticationTimeNanos = authenticationEndNanos + 1000 * 1000 * sessionLifetimeMsToUse;
-                log.debug(
-                        "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
-                        authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse);
+                log.info(
+                        "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms node {}",
+                        authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse, node);
             } else
-                log.debug("Finished {} with no session expiration and no session re-authentication",
+                log.info("Finished {} with no session expiration and no session re-authentication",
                         authenticationOrReauthenticationText());
         }
 
