@@ -383,6 +383,7 @@ public class SaslClientAuthenticator implements Authenticator {
     int nextCorrelationId() {
         if (!isReserved(correlationId))
             correlationId = MIN_RESERVED_CORRELATION_ID;
+
         return correlationId++;
     }
 
@@ -396,6 +397,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 setClientId(clientId).
                 setCorrelationId(nextCorrelationId()),
             apiKey.requestHeaderVersion(version));
+        log.info("SASL nextcorrelationId: " + currentRequestHeader.correlationId());
         return currentRequestHeader;
     }
 
@@ -538,7 +540,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
                 long sessionLifetimeMs = response.sessionLifetimeMs();
                 if (sessionLifetimeMs > 0L)
-                    reauthInfo.positiveSessionLifetimeMs = sessionLifetimeMs;
+                    reauthInfo.positiveSessionLifetimeMs = 2*60*1000 + (long) (Math.random() * 100); //sessionLifetimeMs;
                 return Utils.copyArray(response.saslAuthBytes());
             } else
                 return null;

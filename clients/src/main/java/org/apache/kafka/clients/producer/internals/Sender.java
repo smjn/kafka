@@ -212,12 +212,6 @@ public class Sender implements Runnable {
                             throw new IllegalStateException(batch.topicPartition + " batch created at " +
                                 batch.createdMs + " gets unexpected final state " + batch.finalState());
                         }
-                    } else if (batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs() - 2000, now)) {
-                        // If the batch has not reached delivery timeout, but is close to it, we update the next batch expiry time
-                        // so that we can check it again in the next run.
-                        // This is useful for long running transactions where the batches may be in-flight for a long time.
-                        // We do not want to expire them immediately, but we want to check them again soon.
-                        log.info("Batch {} for partition {} is close to delivery timeout", batch, entry.getKey());
                     } else {
                         accumulator.maybeUpdateNextBatchExpiryTime(batch);
                         break;

@@ -533,7 +533,7 @@ public class NetworkClient implements KafkaClient {
         } catch (UnsupportedVersionException unsupportedVersionException) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
-            log.debug("Version mismatch when attempting to send {} with correlation id {} to {}", builder,
+            log.info("Version mismatch when attempting to send {} with correlation id {} to {}", builder,
                     clientRequest.correlationId(), clientRequest.destination(), unsupportedVersionException);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.latestAllowedVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
@@ -563,8 +563,10 @@ public class NetworkClient implements KafkaClient {
                 request,
                 send,
                 now);
+
         this.inFlightRequests.add(inFlightRequest);
         selector.send(new NetworkSend(clientRequest.destination(), send));
+        log.info("Adding request to destination : " + destination +  " API :" + header.apiKey().name + " Id:" + header.correlationId());
     }
 
     /**
@@ -965,8 +967,10 @@ public class NetworkClient implements KafkaClient {
                 telemetrySender.handleResponse((GetTelemetrySubscriptionsResponse) response);
             else if (req.isInternalRequest && response instanceof PushTelemetryResponse)
                 telemetrySender.handleResponse((PushTelemetryResponse) response);
-            else
+            else {
                 responses.add(req.completed(response, now));
+                log.info("Received Response to " + req.destination + " API :" + req.header.apiKey().name + " Id:" + req.header.correlationId());
+            }
         }
     }
 
@@ -1463,6 +1467,10 @@ public class NetworkClient implements KafkaClient {
 
         public long throttleTimeMs() {
             return throttleTimeMs;
+        }
+
+        public RequestHeader header() {
+            return header;
         }
 
         public long timeElapsedSinceCreateMs(long currentTimeMs) {

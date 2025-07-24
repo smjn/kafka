@@ -645,6 +645,7 @@ public class KafkaChannel implements AutoCloseable {
         if (muteState != ChannelMuteState.NOT_MUTED || midWrite
                 || authenticator.clientSessionReauthenticationTimeNanos() == null)
             return false;
+
         /*
          * We've delayed getting the time as long as possible in case we don't need it,
          * but at this point we need it -- so get it now.

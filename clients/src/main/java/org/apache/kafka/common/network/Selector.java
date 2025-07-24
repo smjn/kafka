@@ -397,6 +397,7 @@ public class Selector implements Selectable, AutoCloseable {
             try {
                 channel.setSend(send);
             } catch (Exception e) {
+                e.printStackTrace();
                 // update the state for consistency, the channel will be discarded after `close`
                 channel.state(ChannelState.FAILED_SEND);
                 // ensure notification via `disconnected` when `failedSends` are processed in the next poll
