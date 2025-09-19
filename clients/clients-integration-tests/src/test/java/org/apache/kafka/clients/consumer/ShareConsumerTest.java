@@ -2715,6 +2715,69 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "12000"),
+            @ClusterConfigProperty(key = "group.share.min.record.lock.duration.ms", value = "12000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1")
+        }
+    )
+    public void testAcqLockRenewal() throws Exception {
+        alterShareAutoOffsetReset("group1", "earliest");
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(1);
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
+                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));) {
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            long beforePollMs = System.currentTimeMillis();
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 500, 1);
+            assertEquals(1, records.count());
+
+            ConsumerRecord<byte[], byte[]> rec = null;
+            for (ConsumerRecord<byte[], byte[]> pollRecord : records) {
+                rec = pollRecord;
+            }
+            long afterPollMs = System.currentTimeMillis();
+
+            // Send an ack around 8 seconds.
+            AtomicBoolean acked = new AtomicBoolean(false);
+            ConsumerRecord<byte[], byte[]> finalRec = rec;
+            service.schedule(() -> {
+                shareConsumer.acknowledge(finalRec, AcknowledgeType.RENEW);
+                acked.set(true);
+            }, 8000 - (afterPollMs - beforePollMs), TimeUnit.MILLISECONDS);
+
+            TestUtils.waitForCondition(acked::get, "record not acked");
+
+            TimeUnit.SECONDS.sleep(5);   // Wait 5 more seconds to make sure old acq lock is expired. 13 > 12
+            ConsumerRecords<byte[], byte[]> records2 = waitedPoll(shareConsumer, 500, 1);
+            assertEquals(1, records2.count());
+
+            ConsumerRecord<byte[], byte[]> rec2 = null;
+            for (ConsumerRecord<byte[], byte[]> pollRecord : records) {
+                rec2 = pollRecord;
+            }
+
+            assertEquals(rec, rec2);
+        } finally {
+            shutdownExecutorService(service);
+        }
+    }
+
     /**
      * Util class to encapsulate state for a consumer/producer
      * being executed by an {@link ExecutorService}.
